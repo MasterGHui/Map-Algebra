@@ -3,7 +3,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
+#include <assert.h>
+#include <float.h>
 static char sht_Offx[13] = {0,-1, 0,1,-2,-1,0,1,2,-1,0,1,0};
 static char sht_Offy[13] = {-2,-1,-1,-1,0,0,0,0,0,1,1,1,2};
 static float sht_DisTmp[13] = {2,2,1,2,2,1,0,1,2,2,1,2,2};
@@ -14,7 +15,7 @@ public:
   virtual float GetTmpDis(int i) = 0;
   virtual int GetOffx(int i) = 0;
   virtual int GetOffy(int i) = 0;
-  };
+};
 
     class COctTmp : public CDistanceTemplet{
     private:
@@ -55,10 +56,8 @@ class Bmpmaker {
 public:
   bool BmpReverse(const char * InputBmpFileName, const char * OutBmpFileName); // 反色
   bool BmpOverlap(const char *InputBmpFileName1, const char *InputBmpFileName2, const char *OutputBmpFilename); //叠置
-  bool BmpSmooth(const char *InputBmpFilename, const char *OutputBmpFileName); // 平滑
-  int distancetransform(char *SrcBmpName, CDistanceTemplet *pTemplet, 
-  const char *OutLocname, const char *OutDicname);
-
+  bool BmpSmooth(const char *InputBmpFilename, const char *OutputBmpFileName, int ModelWidth); // 平滑
+  int distancetransform(char *SrcBmpName, CDistanceTemplet *pTemplet, const char *OutLocname, const char *OutDisname);
 };
 
 #endif
