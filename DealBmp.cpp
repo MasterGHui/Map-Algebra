@@ -270,8 +270,6 @@ bool Bmpmaker::BmpOverlap(const char *InputBmpFileName1, const char *InputBmpFil
 	return true;
 }
 
-
-
 bool Bmpmaker::BmpSmooth(const char *InputBmpFilename, const char *OutputBmpFileName, int ModelWidth) {
 	//1.read bmp and save to a mat
 	//2.data processing
@@ -339,5 +337,423 @@ bool Bmpmaker::BmpSmooth(const char *InputBmpFilename, const char *OutputBmpFile
 	fclose(srcBmp);
 	fclose(destBmp);
 	return true;
+}
+
+bool Bmpmaker::BMP_Voronoi(const char* InputBMPFilePath, const char* OutFileName) {
+		BITMAPFILEHEADER srcBmpHead;
+	BITMAPINFOHEADER srcBmpInfo;
+	unsigned char ColorTab[1024];
+
+	FILE *srcBmp = fopen(InputBMPFilePath, "rb");
+	if (srcBmp == NULL) return false;
+
+	fread(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, srcBmp);
+	fread(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, srcBmp);
+	fread(ColorTab, 1024, 1, srcBmp);
+
+	unsigned MtxHeight = srcBmpInfo.biHeight;
+	unsigned MtxWidth = srcBmpInfo.biWidth;
+	unsigned BufWidth = (MtxWidth + 3) / 4 * 4;
+
+	//保存读取的图片矩阵
+	unsigned char **srcBmpBuf = new unsigned char*[MtxHeight];
+	//保存变换结果矩阵
+	unsigned char **destBmpMtx = new unsigned char *[MtxHeight];
+	//初始化二维数组
+	for (int i = 0; i < MtxHeight; i++)
+	{
+		srcBmpBuf[i] = new unsigned char[BufWidth];
+		destBmpMtx[i] = new unsigned char[BufWidth];
+	}
+
+	unsigned i, j;
+	//循环读取像素矩阵
+	for (i = 0; i < MtxHeight; i++)
+		fread(srcBmpBuf[i], BufWidth, 1, srcBmp);
+	for(i=1;i<MtxHeight-1;i++)
+		for (j = 1; j < BufWidth - 1; j++)
+		{
+			if (srcBmpBuf[i][j] == srcBmpBuf[i - 1][j] && srcBmpBuf[i][j] == srcBmpBuf[i + 1][j] && srcBmpBuf[i][j] == srcBmpBuf[i][j - 1] && srcBmpBuf[i][j] == srcBmpBuf[i][j + 1])
+				destBmpMtx[i][j] = 255; //非边界点赋白色
+			else
+				destBmpMtx[i][j] = 0; //边界点赋黑色
+		}
+	
+	//变换结束，将结果写回
+	FILE *destBmp = fopen(OutFileName, "wb");
+
+	fwrite(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, destBmp);
+	fwrite(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, destBmp);
+	fwrite(ColorTab, 1024, 1, destBmp);
+
+	for (i = 0; i<MtxHeight; i++)
+	{
+		fwrite(destBmpMtx[i], BufWidth, 1, destBmp);
+		delete[] srcBmpBuf[i];
+		srcBmpBuf[i] = NULL;
+		delete[] destBmpMtx[i];
+		destBmpMtx[i] = NULL;
+	}
+
+	delete[] srcBmpBuf;
+	delete[] destBmpMtx;
+	fclose(srcBmp);
+	fclose(destBmp);
+	return true;
+}
+
+bool Bmpmaker::BMP_Buffer(const char* InputBMPFilePath, const char* OutFileName, int distance) {
+		//读取32位位图
+	BITMAPFILEHEADER srcBmpHead;
+	BITMAPINFOHEADER srcBmpInfo;
+
+	FILE *srcBmp = fopen(InputBMPFilePath, "rb");
+	if (srcBmp == NULL) return false;
+
+	fread(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, srcBmp);
+	fread(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, srcBmp);
+
+	unsigned MtxHeight = srcBmpInfo.biHeight;
+	unsigned MtxWidth = srcBmpInfo.biWidth;
+
+	//保存读取的图片矩阵
+	float **srcBmpBuf = new float*[MtxHeight];
+	//初始化二维数组，读取像素矩阵
+	for (int i = 0; i < MtxHeight; i++)
+	{
+		srcBmpBuf[i] = new float[MtxWidth];
+		fread(srcBmpBuf[i], sizeof(float), MtxWidth, srcBmp);
+	}
+
+	unsigned i, j;
+	for(i=0;i<MtxHeight;i++)
+		for (j = 0; j < MtxWidth; j++)
+		{
+			if (fabs(srcBmpBuf[i][j] - 0) < FLT_EPSILON) continue;
+			if (srcBmpBuf[i][j] <= distance) //小于等于距离值，则填充XX颜色
+				srcBmpBuf[i][j] = 100;
+			else
+				srcBmpBuf[i][j] = 0.2;
+		}
+	//写回去
+	FILE * bmpWrite = fopen(OutFileName, "wb");
+	fwrite(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, bmpWrite);
+	fwrite(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, bmpWrite);
+	for (int k = 0; k<MtxHeight; k++)
+	{
+		fwrite(srcBmpBuf[k], sizeof(float), MtxWidth, bmpWrite);
+	}
+	fclose(bmpWrite);
+}
+
+bool Bmpmaker::BMP_MiddleLine(const char* InputBMPFilePath, const char* OutFileName) {
+	BITMAPFILEHEADER srcBmpHead;
+	BITMAPINFOHEADER srcBmpInfo;
+	unsigned char ColorTab[1024];
+
+	FILE *srcBmp = fopen(InputBMPFilePath, "rb");
+	if (srcBmp == NULL)
+		return false;
+
+	fread(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, srcBmp);
+	fread(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, srcBmp);
+	fread(ColorTab, 1024, 1, srcBmp);
+
+	unsigned MtxHeight = srcBmpInfo.biHeight;
+	unsigned MtxWidth = srcBmpInfo.biWidth;
+	unsigned BufWidth = (MtxWidth + 3) / 4 * 4;
+
+	//保存读取的图片矩阵
+	unsigned char **srcBmpBuf = new unsigned char*[MtxHeight];
+	//保存变换结果矩阵
+	unsigned char **destBmpMtx = new unsigned char *[MtxHeight];
+	//初始化二维数组,并读取像素矩阵
+	for (int i = 0; i < MtxHeight; i++)
+	{
+		srcBmpBuf[i] = new unsigned char[BufWidth];
+		destBmpMtx[i] = new unsigned char[BufWidth];
+		fread(srcBmpBuf[i], BufWidth, 1, srcBmp);
+	}
+
+	unsigned i, j;
+	for(i=1;i<MtxHeight-1;i++)
+		for (j = 1; j < BufWidth - 1; j++)
+		{
+			destBmpMtx[i][j] = 255;  
+			if (srcBmpBuf[i][j] == 0) continue; //只对多边形内部进行操作
+			if (srcBmpBuf[i][j] != srcBmpBuf[i - 1][j] || srcBmpBuf[i][j] != srcBmpBuf[i + 1][j] || srcBmpBuf[i][j] != srcBmpBuf[i][j - 1] || srcBmpBuf[i][j] != srcBmpBuf[i][j + 1])
+				destBmpMtx[i][j] = 0; //边界点赋黑色
+		}
+	//变换结束，将结果写回
+	FILE *destBmp = fopen(OutFileName, "wb");
+
+	fwrite(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, destBmp);
+	fwrite(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, destBmp);
+	fwrite(ColorTab, 1024, 1, destBmp);
+
+	for (i = 0; i<MtxHeight; i++)
+	{
+		fwrite(destBmpMtx[i], BufWidth, 1, destBmp);
+		delete[] srcBmpBuf[i];
+		srcBmpBuf[i] = NULL;
+		delete[] destBmpMtx[i];
+		destBmpMtx[i] = NULL;
+	}
+
+	delete[] srcBmpBuf;
+	delete[] destBmpMtx;
+	fclose(srcBmp);
+	fclose(destBmp);
+	return true;
+}
+
+bool Bmpmaker::ScanSrcPtCoors(const char* SourceFileName, const char* CoorsTableFile) {
+	BITMAPFILEHEADER srcBmpHead;
+	BITMAPINFOHEADER srcBmpInfo;
+	unsigned char ColorTab[1024];
+
+	FILE *srcBmp = fopen(SourceFileName, "rb");
+	if (srcBmp == NULL)
+		return false;
+
+	fread(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, srcBmp);
+	fread(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, srcBmp);
+	fread(ColorTab, 1024, 1, srcBmp);
+
+	unsigned MtxHeight = srcBmpInfo.biHeight;
+	unsigned MtxWidth = srcBmpInfo.biWidth;
+	unsigned BufWidth = (MtxWidth + 3) / 4 * 4;
+
+	unsigned char **srcBmpBuf = new unsigned char*[MtxHeight];
+
+	unsigned i, j;
+	for (i = 0; i < MtxHeight; i++)
+	{
+		srcBmpBuf[i] = new unsigned char[BufWidth];
+		fread(srcBmpBuf[i], BufWidth, 1, srcBmp);
+	}
+	FILE* PtCoords = fopen(CoorsTableFile,"w");
+	for(i=0;i<MtxHeight;i++)
+		for (j = 0; j < BufWidth; j++)
+		{
+			if (srcBmpBuf[i][j] == 255||srcBmpBuf[i][j]==0) continue;
+			else
+				fprintf(PtCoords, "%d %d %d\n", srcBmpBuf[i][j], i, j); //依次写入颜色值、行号、列号，注意下标从0开始
+		}
+	for (i = 0; i < MtxHeight; i++)
+		delete[] srcBmpBuf[i];
+	delete[] srcBmpBuf;
+	srcBmpBuf = NULL;
+	fclose(PtCoords);
+	fclose(srcBmp);
+	return true;
+}
+
+bool Bmpmaker::GetTinPtPairs(const char* LocFileName, const char* PtPairsFile) {
+	BITMAPFILEHEADER srcBmpHead;
+	BITMAPINFOHEADER srcBmpInfo;
+	unsigned char ColorTab[1024];
+
+	FILE *srcBmp = fopen(LocFileName, "rb");
+	if (srcBmp == NULL) return false;
+
+	fread(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, srcBmp);
+	fread(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, srcBmp);
+	fread(ColorTab, 1024, 1, srcBmp);
+
+	unsigned MtxHeight = srcBmpInfo.biHeight;
+	unsigned MtxWidth = srcBmpInfo.biWidth;
+	unsigned BufWidth = (MtxWidth + 3) / 4 * 4;
+
+	//保存读取的图片矩阵
+	unsigned char **srcBmpBuf = new unsigned char*[MtxHeight];
+	unsigned int* PtPairs = new unsigned int[1000]; //声明一个数组用于保存点对
+	int top = 0; //定义一个栈顶指针，指向最后一个数组元素的下标
+	//初始化并读取像素矩阵
+	for (int i = 0; i < MtxHeight; i++)
+	{
+		srcBmpBuf[i] = new unsigned char[BufWidth];
+		fread(srcBmpBuf[i], BufWidth, 1, srcBmp);
+	}
+
+	//遍历像素矩阵，获取点对
+	for(int i=1;i<MtxHeight-1;i++)
+		for (int j = 1; j < BufWidth-1; j++)
+		{
+			//若检测到了边界点，则将其加入点对数组
+			if (srcBmpBuf[i][j] != srcBmpBuf[i - 1][j] || srcBmpBuf[i][j] != srcBmpBuf[i + 1][j] || srcBmpBuf[i][j] != srcBmpBuf[i][j - 1] || srcBmpBuf[i][j] != srcBmpBuf[i][j + 1])
+			{
+				unsigned int pair = 0;
+				if (srcBmpBuf[i][j] != srcBmpBuf[i - 1][j])
+				{
+					//老师说较小的乘以1000加上大的，我觉得挺好
+					if (srcBmpBuf[i][j] < srcBmpBuf[i - 1][j])
+					{
+						pair = srcBmpBuf[i][j] * 1000 + srcBmpBuf[i - 1][j];
+						SaveToArray(PtPairs, top, pair);
+					}
+					else
+					{
+						pair = srcBmpBuf[i-1][j] * 1000 + srcBmpBuf[i][j];
+						SaveToArray(PtPairs, top, pair);
+					}
+				}
+				else if (srcBmpBuf[i][j] != srcBmpBuf[i + 1][j])
+				{
+					if(srcBmpBuf[i][j]<srcBmpBuf[i+1][j])
+					{
+						pair = srcBmpBuf[i][j] * 1000 + srcBmpBuf[i + 1][j];
+						SaveToArray(PtPairs, top, pair);
+					}
+					else {
+						pair = srcBmpBuf[i+1][j] * 1000 + srcBmpBuf[i][j];
+						SaveToArray(PtPairs, top, pair);
+					}
+				}
+				else if (srcBmpBuf[i][j] != srcBmpBuf[i][j - 1])
+				{
+					if (srcBmpBuf[i][j] < srcBmpBuf[i][j - 1])
+					{
+						pair = srcBmpBuf[i][j] * 1000 + srcBmpBuf[i][j-1];
+						SaveToArray(PtPairs, top, pair);
+					}
+					else
+					{
+						pair = srcBmpBuf[i][j-1] * 1000 + srcBmpBuf[i][j];
+						SaveToArray(PtPairs, top, pair);
+					}
+				}
+				else
+				{
+					if (srcBmpBuf[i][j] < srcBmpBuf[i][j + 1])
+					{
+						pair = srcBmpBuf[i][j] * 1000 + srcBmpBuf[i][j+1];
+						SaveToArray(PtPairs, top, pair);
+					}
+					else {
+						pair = srcBmpBuf[i][j+1] * 1000 + srcBmpBuf[i][j];
+						SaveToArray(PtPairs, top, pair);
+					}			
+				}
+			}
+		}
+	//将点对写入文件
+	FILE* Pts = fopen(PtPairsFile, "w");
+	for (int i = 0; i < top; i++)
+		fprintf(Pts, "%d\n", PtPairs[i]);
+	fclose(Pts);
+	fclose(srcBmp);
+	return true;
+}
+
+bool Bmpmaker::LinkPts(const char* SourceFileName, const char* PtPairsFile, const char* CoorsTableFile) {
+	//读取原位图
+	BITMAPFILEHEADER srcBmpHead;
+	BITMAPINFOHEADER srcBmpInfo;
+	unsigned char ColorTab[1024];
+
+	FILE *srcBmp = fopen(SourceFileName, "rb");
+	if (srcBmp == NULL)
+		return false;
+
+	fread(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, srcBmp);
+	fread(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, srcBmp);
+	fread(ColorTab, 1024, 1, srcBmp);
+
+	unsigned MtxHeight = srcBmpInfo.biHeight;
+	unsigned MtxWidth = srcBmpInfo.biWidth;
+	unsigned BufWidth = (MtxWidth + 3) / 4 * 4;
+
+	unsigned char **srcBmpBuf = new unsigned char*[MtxHeight];
+
+	unsigned i, j;
+	for (i = 0; i < MtxHeight; i++)
+	{
+		srcBmpBuf[i] = new unsigned char[BufWidth];
+		fread(srcBmpBuf[i], BufWidth, 1, srcBmp);
+	}
+
+	//读取颜色坐标对应表
+	Pt* Pts = new Pt[100];
+	int top1 = 0;
+	FILE* fp1 = fopen(CoorsTableFile, "r");
+	while (!feof(fp1)) //用这种方法读，最后一行会读两次，很奇怪==，好在我有栈
+	{
+		Pt point;
+		fscanf(fp1, "%d %d %d", &point.color, &point.row, &point.column);
+		Pts[top1] = point;
+		top1++;
+	}
+	top1--; //为了避免不必要的麻烦，将栈顶指针下移
+	fclose(fp1);
+
+	//读取要连接的点对
+	int pairs[1000];
+	int top2 = 0;
+	FILE* fp2 = fopen(PtPairsFile, "r");
+	while (!feof(fp2))
+	{
+		int pair;
+		fscanf(fp2, "%d", &pair);
+		pairs[top2] = pair;
+		top2++;
+	}
+	top2--; //为了避免不必要的麻烦，将栈顶指针下移
+	fclose(fp2);
+
+	//用中点画线法连接点对
+	for (i = 0; i < top2; i++)
+	{
+		int point1 = pairs[i] / 1000;
+		int point2 = pairs[i] % 1000;
+		Pt pt1, pt2;
+		for (j = 0; j < top1; j++)
+		{
+			if (Pts[j].color == point1)
+				pt1 = Pts[j];
+			if (Pts[j].color == point2)
+				pt2 = Pts[j];
+		}
+		if (pt1.column <= pt2.column)
+			line(pt1.column, pt1.row, pt2.column, pt2.row, srcBmpBuf);
+		else
+			line(pt2.column, pt2.row, pt1.column, pt1.row, srcBmpBuf);
+	}
+
+	//输出Delauney三角网
+	FILE *destBmp = fopen("Delauney_trigger", "wb");
+
+	fwrite(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, destBmp);
+	fwrite(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, destBmp);
+	fwrite(ColorTab, 1024, 1, destBmp);
+
+	for (i = 0; i<MtxHeight; i++)
+	{
+		fwrite(srcBmpBuf[i], BufWidth, 1, destBmp);
+		delete[] srcBmpBuf[i];
+		srcBmpBuf[i] = NULL;
+	}
+	fclose(destBmp);
+	fclose(srcBmp);
+}
+
+void Bmpmaker::line(int x1, int y1, int x2, int y2, unsigned char** srcBmpBuf) {
+	double increx, increy, length;
+	double x, y;
+	int i;
+	//选择增值较大的方向
+	if (abs(x2 - x1) > abs(y2 - y1))
+		length = abs(x2 - x1);
+	else
+		length = abs(y2 - y1);
+	increx = (x2 - x1) / length; //x方向增量
+	increy = (y2 - y1) / length; //y方向增量
+	x = x1; y = y1;
+	for (i = 1; i <= length; i++)
+	{
+		srcBmpBuf[int(y)][int(x)] = 0;
+		x += increx;
+		y += increy;
+	}
 }
 
