@@ -721,7 +721,7 @@ bool Bmpmaker::LinkPts(const char* SourceFileName, const char* PtPairsFile, cons
 	}
 
 	//输出Delauney三角网
-	FILE *destBmp = fopen("Delauney_trigger", "wb");
+	FILE *destBmp = fopen("Delauney_trigger.bmp", "wb");
 
 	fwrite(&srcBmpHead, sizeof(BITMAPFILEHEADER), 1, destBmp);
 	fwrite(&srcBmpInfo, sizeof(BITMAPINFOHEADER), 1, destBmp);

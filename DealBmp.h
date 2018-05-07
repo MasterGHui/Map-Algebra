@@ -77,6 +77,8 @@ public:
   bool GetTinPtPairs(const char* LocFileName, const char* PtPairsFile); //扫描分配场获取边界点对组
   bool LinkPts(const char* SourceFileName, const char* PtPairsFile, const char* CoorsTableFile); //连接点对输出三角网
   void line(int x1, int y1, int x2, int y2, unsigned char **srcBmpBuf);//DDA直线生成
+
+  
   void SaveToArray(unsigned int* array, int& top, unsigned int value)
       {
         if (value < 1000) //若值小于1000，则不存
